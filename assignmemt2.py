@@ -5,6 +5,7 @@ import random
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.preprocessing import normalize
 
 def split_dataset(dataset, test_ratio=0.2, seed=42):
     random.seed(seed)
@@ -26,6 +27,34 @@ def split_dataset(dataset, test_ratio=0.2, seed=42):
     
         return train_set, test_set
 
+# Step 2: Cluster Descriptors (K-Means for BoVW)
+def cluster_descriptors(descriptors_list, num_clusters):
+    # Combine all descriptors into one array
+    all_descriptors = np.vstack(descriptors_list)
+    print(f"Clustering {all_descriptors.shape[0]} descriptors into {num_clusters} clusters.")
+    
+    kmeans = KMeans(n_clusters=num_clusters, random_state=42, verbose=1)
+    kmeans.fit(all_descriptors)
+    return kmeans
+
+# Step 3: Create Bag of Words Histogram for Each Image
+def create_bow_histograms(descriptors_list, kmeans):
+    num_clusters = kmeans.n_clusters
+    histograms = []
+    
+    for descriptors in descriptors_list:
+        if descriptors is not None:
+            # Assign descriptors to the nearest cluster center
+            labels = kmeans.predict(descriptors)
+            # Build a histogram of cluster assignments
+            histogram, _ = np.histogram(labels, bins=np.arange(num_clusters + 1))
+            histograms.append(histogram)
+        else:
+            histograms.append(np.zeros(num_clusters))
+    
+    # Normalize histograms for consistency
+    histograms = normalize(histograms, norm='l2')
+    return histograms
 
 
 
