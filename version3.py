@@ -9,6 +9,11 @@ from sklearn.preprocessing import normalize
 from sklearn.svm import SVC
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
 
 
 def split_dataset(dataset, test_ratio=0.2, seed=42):
@@ -42,23 +47,6 @@ def cluster_descriptors(descriptors_list, num_clusters):
     return kmeans
 
 # Step 3: Create Bag of Words Histogram for Each Image
-'''
-def create_bow_histograms(descriptors_list, kmeans):
-    num_clusters = kmeans.n_clusters
-    histograms = []
-    
-    for descriptors in descriptors_list:
-        if descriptors is not None:
-            labels = kmeans.predict(descriptors)
-            histogram, _ = np.histogram(labels, bins=np.arange(num_clusters + 1))
-            histograms.append(histogram)
-        else:
-            histograms.append(np.zeros(num_clusters))
-    
-    histograms = normalize(histograms, norm='l2')
-    return histograms
-'''
-
 def create_bow_histograms(descriptors_list, kmeans):
     num_clusters = kmeans.n_clusters
     histograms = []
@@ -79,17 +67,11 @@ def create_bow_histograms(descriptors_list, kmeans):
     return np.array(histograms)
 
 
-
-
 # Path to the extracted folder
 extracted_path = "isolated_words_per_user"
-
 # Dictionary to store images by user
 images_by_user = defaultdict(list)
 
-
-labels = []
-user_id=''
 # Traverse the folder structure
 for root, dirs, files in os.walk(extracted_path):
     for file in files:
@@ -100,48 +82,69 @@ for root, dirs, files in os.walk(extracted_path):
             
             # Add image to the dictionary
             images_by_user[user_id].append(file_path)
-    labels.append(user_id)
 
-num_clusters = 100  # Number of visual words
+
+num_clusters = 1000  # Number of visual words
 sift = cv2.SIFT_create()
 descriptors_list  = []
+labels = []
 for user, image_list in images_by_user.items():
-    
-    #print(f"User ID: {user}, Number of Images: {len(image_list)}")
-   # if user == 'user001':
-      
-      for image in image_list:
+    for image in image_list:
         image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
+        # Step 1: Extract SIFT descriptors from all images
         keypoints, descriptors = sift.detectAndCompute(image, None)
         if descriptors is not None:
             descriptors_list.append(descriptors)
+            labels.append(user)
 
-       # Step 1: Extract SIFT descriptors from all images
-       # Step 3: Perform k-means clustering
+# Step 2: Perform k-means clustering to build the visual vocabulary
 kmeans = cluster_descriptors(descriptors_list, num_clusters)
 
 print(f"Number of images: {len(descriptors_list)}")
 print(f"Number of labels: {len(labels)}")
 
-      
-      # Step 4: Create BoVW histograms
+# Step 3: Create BoVW histograms
 bow_histograms = create_bow_histograms(descriptors_list, kmeans)
-      
-
 
 print(f"Number of histograms: {len(bow_histograms)}")
 print(f"Number of labels: {len(labels)}")
 
-
-      # Step 5: Train a Classifier
+# Step 4: split the dataset randomly
+random.shuffle(bow_histograms)
 X_train, X_test, y_train, y_test = train_test_split(bow_histograms, labels, test_size=0.2, random_state=42)
+
+
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X_train, y_train)
+y_pred = knn.predict(X_test)
+print(f"KNN Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+cm = confusion_matrix(y_test, y_pred)
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+
+
+nb = GaussianNB()
+nb.fit(X_train, y_train)
+y_pred = nb.predict(X_test)
+print(f"Naive Bayes Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+cm = confusion_matrix(y_test, y_pred)
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+
+'''
+rf = RandomForestClassifier(n_estimators=100, random_state=42)
+rf.fit(X_train, y_train)
+y_pred = rf.predict(X_test)
+print(f"Random Forest Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+
+
+
+# Step 5: Train an SVM Classifier
 svm = SVC(kernel='linear', random_state=42)
 svm.fit(X_train, y_train)
       
-      # Step 6: Evaluate Classifier
+# Step 5: Evaluate Classifier
 y_pred = svm.predict(X_test)
-print(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
-
+print(f"SVM Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+'''
 
 
 '''
@@ -156,18 +159,4 @@ print(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
       print(f"BoVW histograms shape: {len(bow_histograms)} x {len(bow_histograms[0])}")
       # bow_histograms is ready for classifier training (e.g., SVM, Random Forest)
 
-
-# Example: Labels corresponding to image_paths
-labels = [1, 2,3,4,5,6,7,8,9,10,11,12]  # Replace with actual labels
-
-# Split data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(bow_histograms, labels, test_size=0.2, random_state=42)
-
-# Train SVM classifier
-svm = SVC(kernel='linear', random_state=42)
-svm.fit(X_train, y_train)
-
-# Predict and evaluate
-y_pred = svm.predict(X_test)
-print(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
 '''
