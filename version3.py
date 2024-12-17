@@ -133,15 +133,15 @@ start_time = time.time()
 
 for image , user in augmented_dataset:
         # Extract SIFT / ORB descriptors from all images
-        keypoints, descriptors = sift.detectAndCompute(image, None)
-        #kp = orb.detect(image,None)
-        #kp, descriptors = orb.compute(image, kp)
+        #keypoints, descriptors = sift.detectAndCompute(image, None)
+        kp = orb.detect(image,None)
+        kp, descriptors = orb.compute(image, kp)
         if descriptors is not None:
             descriptors_list.append(descriptors)
             labels.append(user)
 end_time = time.time()
 computation = end_time - start_time
-print(f"Time using SIFT algorithm for feature extraction:  {computation:.4f} seconds") 
+#print(f"Time using SIFT algorithm for feature extraction:  {computation:.4f} seconds") 
 print(f"Time using ORB algorithm for feature extraction:  {computation:.4f} seconds") 
 
 # Perform k-means clustering 
@@ -160,7 +160,9 @@ X_train, X_test, y_train, y_test = train_test_split(bow_histograms, labels, test
 
 
 
-# Define parameter grid for SVC
+#  Train & Evaluate an SVM Classifier
+'''
+# parameter grid for SVC
 param_grid = [
     {'kernel': ['poly'], 'degree': [2, 3, 4, 5]},  # Polynomial kernel degrees
     {'kernel': ['rbf'], 'gamma': [0.1, 1, 10, 100]}  # RBF kernel gamma values
@@ -173,29 +175,23 @@ grid_search = GridSearchCV(SVC(random_state=42), param_grid, cv=3, scoring='accu
 grid_search.fit(X_train, y_train)
 
 # Best hyperparameters and model
-print(f"Best Parameters: {grid_search.best_params_}")
-print(f"Best Validation Accuracy: {grid_search.best_score_}")
+print(f"SVM Best Parameters: {grid_search.best_params_}")
+print(f"SVM Best Validation Accuracy: {grid_search.best_score_}")
 best_model = grid_search.best_estimator_
 
 
 best_model.fit(X_train, y_train)  # Train on train + validation
 test_predictions = best_model.predict(X_test)
 test_accuracy = accuracy_score(y_test, test_predictions)
-print(f"Final Test Accuracy: {test_accuracy}")
+print(f"SVM Final Test Accuracy: {test_accuracy}")
 
+'''
 
-#  Train & Evaluate an SVM Classifier
-svm = SVC(kernel='rbf', gamma=0.1, random_state=42)
+svm = SVC(kernel='poly', degree=2, random_state=42)
 svm.fit(X_train, y_train)
       
 y_pred = svm.predict(X_test)
-print(f"SVM with rbf kernel Accuracy: {accuracy_score(y_test, y_pred):.2f}")
-
-svm = SVC(kernel='poly', degree=3, random_state=42)
-svm.fit(X_train, y_train)
-      
-y_pred = svm.predict(X_test)
-print(f"SVM with polynomial kernel Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+print(f"SVM with polynomial kernel of degree 2 Accuracy: {accuracy_score(y_test, y_pred):.2f}")
 
 #  Train & Evaluate a Random Forest Classifier
 rf = RandomForestClassifier(n_estimators=100, random_state=42)
@@ -209,17 +205,3 @@ nb = GaussianNB()
 nb.fit(X_train, y_train)
 y_pred = nb.predict(X_test)
 print(f"Naive Bayes Accuracy: {accuracy_score(y_test, y_pred):.2f}")
-
-'''
-# Print predictions and actual labels side by side
-print("\nComparison of actual vs predicted values:")
-for actual, predicted in zip(y_test, y_pred):
-    print(f"Actual: {actual}, Predicted: {predicted}")
-
-knn = KNeighborsClassifier(n_neighbors=5)
-knn.fit(X_train, y_train)
-y_pred = knn.predict(X_test)
-print(f"KNN Accuracy: {accuracy_score(y_test, y_pred):.2f}")
-cm = confusion_matrix(y_test, y_pred)
-sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
-'''
