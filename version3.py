@@ -12,9 +12,9 @@ from sklearn.metrics import accuracy_score
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import GaussianNB
-from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import time
+from sklearn.model_selection import GridSearchCV
 
 def split_dataset(dataset, test_ratio=0.2, seed=42):
     random.seed(seed)
@@ -126,32 +126,32 @@ for user, image_list in images_by_user.items():
 
 num_clusters = 1000  
 sift = cv2.SIFT_create()
+orb = cv2.ORB_create()
 descriptors_list  = []
 labels = []
-#for user, image_list in images_by_user.items():
-#    for image in image_list:
+start_time = time.time()
+
 for image , user in augmented_dataset:
-        #image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
-        # Step 1: Extract SIFT descriptors from all images
+        # Extract SIFT / ORB descriptors from all images
         keypoints, descriptors = sift.detectAndCompute(image, None)
+        #kp = orb.detect(image,None)
+        #kp, descriptors = orb.compute(image, kp)
         if descriptors is not None:
             descriptors_list.append(descriptors)
             labels.append(user)
- 
-# Step 2: Perform k-means clustering to build the visual vocabulary
+end_time = time.time()
+computation = end_time - start_time
+print(f"Time using SIFT algorithm for feature extraction:  {computation:.4f} seconds") 
+print(f"Time using ORB algorithm for feature extraction:  {computation:.4f} seconds") 
+
+# Perform k-means clustering 
 kmeans = cluster_descriptors(descriptors_list, num_clusters)
 
-print(f"Number of images: {len(descriptors_list)}")
-print(f"Number of labels: {len(labels)}")
-
-# Step 3: Create BoVW histograms
+# Create BoVW histograms
 bow_histograms = create_bow_histograms(descriptors_list, kmeans)
 
-print(f"Number of histograms: {len(bow_histograms)}")
-print(f"Number of labels: {len(labels)}")
 
-# Step 4: split the dataset randomly
-#random.shuffle(bow_histograms)
+# split the dataset randomly
 combined = list(zip(bow_histograms, labels))
 random.shuffle(combined)
 bow_histograms, labels = zip(*combined)
@@ -160,19 +160,51 @@ X_train, X_test, y_train, y_test = train_test_split(bow_histograms, labels, test
 
 
 
-'''
-# Step 5: Train an SVM Classifier
-#svm = SVC(kernel='linear', random_state=42)
-#svm = SVC(kernel='poly', degree=3, random_state=42)
+# Define parameter grid for SVC
+param_grid = [
+    {'kernel': ['poly'], 'degree': [2, 3, 4, 5]},  # Polynomial kernel degrees
+    {'kernel': ['rbf'], 'gamma': [0.1, 1, 10, 100]}  # RBF kernel gamma values
+]
+
+# Initialize GridSearchCV
+grid_search = GridSearchCV(SVC(random_state=42), param_grid, cv=3, scoring='accuracy', verbose=2)
+
+# Fit to training data
+grid_search.fit(X_train, y_train)
+
+# Best hyperparameters and model
+print(f"Best Parameters: {grid_search.best_params_}")
+print(f"Best Validation Accuracy: {grid_search.best_score_}")
+best_model = grid_search.best_estimator_
+
+
+best_model.fit(X_train, y_train)  # Train on train + validation
+test_predictions = best_model.predict(X_test)
+test_accuracy = accuracy_score(y_test, test_predictions)
+print(f"Final Test Accuracy: {test_accuracy}")
+
+
+#  Train & Evaluate an SVM Classifier
 svm = SVC(kernel='rbf', gamma=0.1, random_state=42)
 svm.fit(X_train, y_train)
       
-# Step 5: Evaluate Classifier
 y_pred = svm.predict(X_test)
-print(f"SVM Accuracy: {accuracy_score(y_test, y_pred):.2f}")
-'''
+print(f"SVM with rbf kernel Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+
+svm = SVC(kernel='poly', degree=3, random_state=42)
+svm.fit(X_train, y_train)
+      
+y_pred = svm.predict(X_test)
+print(f"SVM with polynomial kernel Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+
+#  Train & Evaluate a Random Forest Classifier
+rf = RandomForestClassifier(n_estimators=100, random_state=42)
+rf.fit(X_train, y_train)
+y_pred = rf.predict(X_test)
+print(f"Random Forest Accuracy: {accuracy_score(y_test, y_pred):.2f}")
 
 
+#  Train & Evaluate a Naive Bayes Classifier
 nb = GaussianNB()
 nb.fit(X_train, y_train)
 y_pred = nb.predict(X_test)
@@ -183,21 +215,6 @@ print(f"Naive Bayes Accuracy: {accuracy_score(y_test, y_pred):.2f}")
 print("\nComparison of actual vs predicted values:")
 for actual, predicted in zip(y_test, y_pred):
     print(f"Actual: {actual}, Predicted: {predicted}")
-
-
-
-
-cm = confusion_matrix(y_test, y_pred)
-sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
-
-
-
-
-rf = RandomForestClassifier(n_estimators=100, random_state=42)
-rf.fit(X_train, y_train)
-y_pred = rf.predict(X_test)
-print(f"Random Forest Accuracy: {accuracy_score(y_test, y_pred):.2f}")
-
 
 knn = KNeighborsClassifier(n_neighbors=5)
 knn.fit(X_train, y_train)
