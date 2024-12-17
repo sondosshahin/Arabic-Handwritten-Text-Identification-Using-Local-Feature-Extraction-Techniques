@@ -14,7 +14,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
-
+import time
 
 def split_dataset(dataset, test_ratio=0.2, seed=42):
     random.seed(seed)
@@ -42,20 +42,22 @@ def augment_image(image):
     augmented_images = []
 
     # Rotate the image
-    for angle in [90, 180, 270]:  
+    for angle in [90, 180]:  #, 270
         (h, w) = image.shape[:2]
         center = (w // 2, h // 2)
         M = cv2.getRotationMatrix2D(center, angle, 1.0)  # Scale is 1.0
         rotated = cv2.warpAffine(image, M, (w, h))
         augmented_images.append(rotated)
 
+    
+
+    return augmented_images    
+'''
     # Scale the image
     for scale in [0.5, 1.5]:  # Scaling factors
         scaled = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
         augmented_images.append(scaled)
-
-    return augmented_images    
-
+'''
 
 # Step 2: Cluster Descriptors (K-Means for BoVW)
 def cluster_descriptors(descriptors_list, num_clusters):
@@ -84,7 +86,7 @@ def create_bow_histograms(descriptors_list, kmeans):
             histograms.append(np.zeros(num_clusters))
     
     # Normalize histograms for consistency
-    histograms = normalize(histograms, norm='l2')
+    #histograms = normalize(histograms, norm='l2')
     return np.array(histograms)
 
 
@@ -122,7 +124,7 @@ for user, image_list in images_by_user.items():
         for augmented_image in augmented_images:
             augmented_dataset.append((augmented_image, user))  # Tuple: (image, label)
 
-num_clusters = 2000  
+num_clusters = 1000  
 sift = cv2.SIFT_create()
 descriptors_list  = []
 labels = []
@@ -149,9 +151,16 @@ print(f"Number of histograms: {len(bow_histograms)}")
 print(f"Number of labels: {len(labels)}")
 
 # Step 4: split the dataset randomly
-random.shuffle(bow_histograms)
+#random.shuffle(bow_histograms)
+combined = list(zip(bow_histograms, labels))
+random.shuffle(combined)
+bow_histograms, labels = zip(*combined)
+
 X_train, X_test, y_train, y_test = train_test_split(bow_histograms, labels, test_size=0.2, random_state=42)
 
+
+
+'''
 # Step 5: Train an SVM Classifier
 #svm = SVC(kernel='linear', random_state=42)
 #svm = SVC(kernel='poly', degree=3, random_state=42)
@@ -161,22 +170,27 @@ svm.fit(X_train, y_train)
 # Step 5: Evaluate Classifier
 y_pred = svm.predict(X_test)
 print(f"SVM Accuracy: {accuracy_score(y_test, y_pred):.2f}")
-
 '''
-knn = KNeighborsClassifier(n_neighbors=5)
-knn.fit(X_train, y_train)
-y_pred = knn.predict(X_test)
-print(f"KNN Accuracy: {accuracy_score(y_test, y_pred):.2f}")
-cm = confusion_matrix(y_test, y_pred)
-sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
 
 
 nb = GaussianNB()
 nb.fit(X_train, y_train)
 y_pred = nb.predict(X_test)
 print(f"Naive Bayes Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+
+'''
+# Print predictions and actual labels side by side
+print("\nComparison of actual vs predicted values:")
+for actual, predicted in zip(y_test, y_pred):
+    print(f"Actual: {actual}, Predicted: {predicted}")
+
+
+
+
 cm = confusion_matrix(y_test, y_pred)
 sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+
+
 
 
 rf = RandomForestClassifier(n_estimators=100, random_state=42)
@@ -185,21 +199,10 @@ y_pred = rf.predict(X_test)
 print(f"Random Forest Accuracy: {accuracy_score(y_test, y_pred):.2f}")
 
 
-
-
-'''
-
-
-'''
-      
-      # Step 2: Perform k-means clustering to build the visual vocabulary
-      kmeans = cluster_descriptors(all_descriptors, num_clusters)
-      
-      # Step 3: Create Bag of Visual Words histograms
-      bow_histograms = create_bow_histograms(all_descriptors, kmeans)
-      
-      # Step 4: Use `bow_histograms` as features for classification
-      print(f"BoVW histograms shape: {len(bow_histograms)} x {len(bow_histograms[0])}")
-      # bow_histograms is ready for classifier training (e.g., SVM, Random Forest)
-
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X_train, y_train)
+y_pred = knn.predict(X_test)
+print(f"KNN Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+cm = confusion_matrix(y_test, y_pred)
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
 '''
