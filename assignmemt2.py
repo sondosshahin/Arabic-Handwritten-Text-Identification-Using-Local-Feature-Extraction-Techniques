@@ -16,27 +16,6 @@ import seaborn as sns
 import time
 from sklearn.model_selection import GridSearchCV
 
-def split_dataset(dataset, test_ratio=0.2, seed=42):
-    random.seed(seed)
-    train_set = []
-    test_set = []
-
-    for user, images in dataset.items():
-        # Shuffle the images for randomness
-        random.shuffle(images)
-        
-        # Ensure at least one image per word goes to the test set
-        num_test = max(1, int(len(images) * test_ratio))
-        
-        test_images = images[:num_test]
-        train_images = images[num_test:]
-        
-        test_set.extend(test_images)
-        train_set.extend(train_images)
-    
-        return train_set, test_set
-    
-
 # Function to perform augmentation
 def augment_image(image):
     augmented_images = []
