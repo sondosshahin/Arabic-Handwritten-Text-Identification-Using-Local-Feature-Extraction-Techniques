@@ -15,6 +15,8 @@ from sklearn.naive_bayes import GaussianNB
 import seaborn as sns
 import time
 from sklearn.model_selection import GridSearchCV
+import matplotlib.pyplot as plt
+
 
 def split_dataset(dataset, test_ratio=0.2, seed=42):
     random.seed(seed)
@@ -131,18 +133,31 @@ descriptors_list  = []
 labels = []
 start_time = time.time()
 
-for image , user in augmented_dataset:
-        # Extract SIFT / ORB descriptors from all images
-        #keypoints, descriptors = sift.detectAndCompute(image, None)
-        kp = orb.detect(image,None)
-        kp, descriptors = orb.compute(image, kp)
-        if descriptors is not None:
-            descriptors_list.append(descriptors)
-            labels.append(user)
+
+# Unpack features and labels from augmented_dataset
+X, y = zip(*augmented_dataset)
+
+# Split into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Continue with the rest of your code
+descriptors_list = []
+labels = []
+start_time = time.time()
+
+# Extract features from training images
+for image, user in zip(X_train, y_train):
+    keypoints, descriptors = sift.detectAndCompute(image, None)
+    #kp = orb.detect(image, None)
+    #kp, descriptors = orb.compute(image, kp)
+    if descriptors is not None:
+        descriptors_list.append(descriptors)
+        labels.append(user)
+
 end_time = time.time()
 computation = end_time - start_time
-#print(f"Time using SIFT algorithm for feature extraction:  {computation:.4f} seconds") 
-print(f"Time using ORB algorithm for feature extraction:  {computation:.4f} seconds") 
+print(f"Time using ORB algorithm for feature extraction: {computation:.4f} seconds")
+
 
 # Perform k-means clustering 
 kmeans = cluster_descriptors(descriptors_list, num_clusters)
@@ -150,13 +165,84 @@ kmeans = cluster_descriptors(descriptors_list, num_clusters)
 # Create BoVW histograms
 bow_histograms = create_bow_histograms(descriptors_list, kmeans)
 
+# Initialize lists for test descriptors and true labels
+test_descriptors_list = []
+true_labels = []
 
-# split the dataset randomly
-combined = list(zip(bow_histograms, labels))
-random.shuffle(combined)
-bow_histograms, labels = zip(*combined)
 
-X_train, X_test, y_train, y_test = train_test_split(bow_histograms, labels, test_size=0.2, random_state=42)
+total_keypoints = 0
+num_images = len(X_test)  
+# Extract descriptors for the test set
+for image, user in zip(X_test, y_test):
+    kp, descriptors = sift.detectAndCompute(image, None)
+    #kp = orb.detect(image, None)
+    num_keypoints = len(kp)
+    total_keypoints += num_keypoints
+    #kp, descriptors = orb.compute(image, kp)
+    if descriptors is not None:
+        test_descriptors_list.append(descriptors)
+        true_labels.append(user)
+average_keypoints = total_keypoints / num_images
+print(f"SIFT Average number of keypoints across all images: {average_keypoints:.2f}")
+
+# Quantize test descriptors into visual words using the trained kmeans model
+test_bow_histograms = create_bow_histograms(test_descriptors_list, kmeans)
+
+# Predict the user by comparing test histograms to training histograms
+predicted_users = []
+for test_hist in test_bow_histograms:
+    min_distance = float('inf')
+    predicted_user = None
+    
+    # Compare test histogram with each training histogram
+    for train_hist, train_user in zip(bow_histograms, labels):
+        # Calculate distance (e.g., Euclidean distance) between histograms
+        distance = np.linalg.norm(test_hist - train_hist)
+        
+        # Keep track of the closest match
+        if distance < min_distance:
+            min_distance = distance
+            predicted_user = train_user
+    
+    predicted_users.append(predicted_user)
+
+# Evaluate performance
+accuracy = sum(p == t for p, t in zip(predicted_users, true_labels)) / len(true_labels)
+print(f"Accuracy: {accuracy * 100:.2f}%")
+
+
+
+# Ensure BoVW histograms are numpy arrays
+X_train_bow = np.array(bow_histograms)
+y_train = np.array(labels)
+
+X_test_bow = np.array(test_bow_histograms)
+y_test = np.array(true_labels)
+
+
+
+
+#  Train & Evaluate a Random Forest Classifier
+rf = RandomForestClassifier(n_estimators=100, random_state=42)
+rf.fit(X_train_bow, y_train)
+y_pred = rf.predict(X_test_bow)
+print(f"Random Forest Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+
+
+#  Train & Evaluate a Naive Bayes Classifier
+nb = GaussianNB()
+nb.fit(X_train_bow, y_train)
+y_pred = nb.predict(X_test_bow)
+print(f"Naive Bayes Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+
+
+svm = SVC(kernel='poly', degree=2, random_state=42)  # You can choose other kernels if needed
+svm.fit(X_train_bow, y_train)
+
+# Test the SVM
+accuracy = svm.score(X_test_bow, y_test)
+print(f"SVM Accuracy: {accuracy * 100:.2f}%")
+
 
 
 
@@ -185,7 +271,6 @@ test_predictions = best_model.predict(X_test)
 test_accuracy = accuracy_score(y_test, test_predictions)
 print(f"SVM Final Test Accuracy: {test_accuracy}")
 
-'''
 
 svm = SVC(kernel='poly', degree=2, random_state=42)
 svm.fit(X_train, y_train)
@@ -205,3 +290,31 @@ nb = GaussianNB()
 nb.fit(X_train, y_train)
 y_pred = nb.predict(X_test)
 print(f"Naive Bayes Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+
+
+'''
+# Data
+classifiers = ['Naive Bayes', 'SVM', 'Random Forest']
+sift_accuracies = [0.28, 0.42, 0.69]  # Example values
+orb_accuracies = [0.21, 0.23, 0.22]   # Example values
+
+# X-axis positions
+x = np.arange(len(classifiers))  # the label locations
+width = 0.35  # the width of the bars
+
+# Create the plot
+fig, ax = plt.subplots(figsize=(8, 6))
+bar1 = ax.bar(x - width/2, sift_accuracies, width, label='SIFT', color='skyblue')
+bar2 = ax.bar(x + width/2, orb_accuracies, width, label='ORB', color='orange')
+
+# Add labels, title, and legend
+ax.set_xlabel('Classifiers')
+ax.set_ylabel('Accuracy')
+ax.set_title('Accuracy Comparison of SIFT and ORB with Classifiers')
+ax.set_xticks(x)
+ax.set_xticklabels(classifiers)
+ax.legend()
+
+# Show the plot
+plt.tight_layout()
+plt.show()
